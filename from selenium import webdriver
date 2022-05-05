@@ -1,0 +1,108 @@
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import NoSuchElementException
+from scrape_linkedin import ProfileScraper
+#from parsel import Selector
+import pandas as pd
+import pymongo as pm
+import json
+import time
+import random
+import browser_cookie3
+import datetime
+import sys
+from flask import Flask, request
+from flask_restful import Resource, Api
+from webargs import fields, validate
+from webargs.flaskparser import use_kwargs, parser
+import requests
+from datetime import date
+import parameters
+
+app = Flask(_name_)
+api = Api(app)
+
+
+
+
+
+class UrlScraper(Resource):
+    args = {
+        'queryString': fields.Str(
+            required=True
+        )
+    }
+    @use_kwargs(args)
+    def get(self,queryString):
+        linkedin_urls = []
+        linkedin_web_elements = []
+        driver = webdriver.Chrome(parameters.chrome_driver_path)
+        driver.get(parameters.google_url)
+        search_query = driver.find_element_by_name('q')
+        search_query.send_keys(parameters.search_query_1 + queryString + parameters.search_query_2+parameters.country)
+        #time.sleep(random.randint(10, 20))
+        search_query.send_keys(Keys.RETURN)
+    
+
+##all pages
+        last_page_content='afficher les résultats les plus pertinents'
+        last_page = False 
+
+        while not last_page:
+
+            linkedin_web_elements=driver.find_elements_by_xpath("//div[@class='r']//a")
+            for item in linkedin_web_elements:
+                if('google' not in item.get_attribute("href")):
+                    profile=item.get_attribute("href")
+                    x = profile.find("/")
+                    y = profile.find(".")
+                    profile=profile.replace(profile[x+2:y],"www")
+                   
+                    linkedin_urls.append(profile)
+                    
+                    
+                    
+            ####### all google pages
+            next_page=''
+            next_page = driver.find_element_by_xpath("//a[@id='pnnext']").get_attribute("href")
+            
+            driver.get(next_page)
+            
+            elem = driver.find_element_by_xpath("//*")
+            source_code = elem.get_attribute("outerHTML")
+        
+            #to iterate through all google result pages
+            #last_page=last_page_content in source_code
+            
+            # to force it just to parse the first page ( to delete it later and uncomment the previous line )
+            last_page=True
+            
+              # END ####### all google pages
+            
+        
+            #time.sleep(random.randint(10, 20))
+            #driver.quit()
+            #linkedin_urls = linkedin_urls[:4]
+           
+        print(linkedin_urls)
+        headers = {'Content-type': 'application/json'}
+        creation_date_time = date.today()
+        for i in range(len(linkedin_urls)):
+            r = requests.post(parameters.profile_url_webservice+'/profileUrl',
+                                  headers=headers,
+                                  json={"linkedin_url": linkedin_urls[i],
+                                        "search_query": queryString})
+                                        #"discovery_date" : None,
+                                        #"last_scrape_date" : None,
+                                        #"to_scrape" : True,
+                                        #"is_new" : True})
+            print(r.status_code, r.reason)
+    
+        return linkedin_urls
+
+api.add_resource(UrlScraper, '/url_scraper', endpoint='google')
+
+
+if _name_ == '_main_':
+    app.run(host='0.0.0.0', port=7000,debug=True)
+
